@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+
+import { Sunrise, Sunset, RotateCwClock, Sprout, Leaf } from '@lucide/vue'
+
 import {
   dayNumber,
   fmtDay,
@@ -16,6 +19,7 @@ const year = computed(() => now.value.getFullYear())
 
 const events = computed(() => getSeasonEvents(year.value))
 const upcoming = computed(() => getUpcoming(events.value, today.value))
+
 const upcomingSolstices = computed(() =>
   events.value
     .filter(
@@ -24,6 +28,7 @@ const upcomingSolstices = computed(() =>
     .slice(0, 2),
 )
 const nextSolstice = computed(() => upcomingSolstices.value[0]!)
+
 const fartherSolstice = computed(() =>
   [...events.value]
     .reverse()
@@ -45,33 +50,38 @@ const sunTimes = computed(() => getSunTimes(now.value))
 </script>
 
 <template>
-  <div class="season-info">
-    <small>{{ fmtDay(today) }} · Bern</small>
+  <div class="margin-auto flex flex-col gap-10 items-center text-center">
+    <section class="mt-2">{{ fmtDay(today) }} · Bern</section>
 
-    <h1>{{ nextSolstice.day - today }} days until the {{ nextSolstice.kind }} solstice</h1>
-    <small>Mirror day: {{ nextMirror.date }}</small>
-
-    <h2>{{ today - fartherSolstice.day }} days since the {{ fartherSolstice.kind }} solstice</h2>
-    <small>Mirror day: {{ fartherMirror.date }}</small>
-
-    <section>
-      <h3>Next Equinoxes</h3>
-      <ul>
-        <li v-for="e in equinoxes" :key="e.kind">
-          {{ e.kind }}: {{ e.date }} (in {{ e.days }} days)
-        </li>
-      </ul>
+    <section class="flex flex-col items-center">
+      <h1 class="text-5xl font-bold">
+        {{ nextSolstice.day - today }} days until the {{ nextSolstice.kind }} solstice
+      </h1>
+      <div class="text-sm mt-4">Mirror day:</div>
+      <div>{{ nextMirror.date }}</div>
     </section>
 
-    <section>
-      <h3>Next DST switch</h3>
-      <p>{{ dst.date }}, {{ dst.label }} (in {{ dst.days }} days)</p>
+    <section class="flex flex-col items-center">
+      <h2 class="text-3xl">
+        {{ today - fartherSolstice.day }} days since the {{ fartherSolstice.kind }} solstice
+      </h2>
+      <div class="text-sm mt-4">Mirror day:</div>
+      <div>{{ fartherMirror.date }}</div>
     </section>
 
-    <section>
-      <h3>Sunrise &amp; sunset in Bern</h3>
-      <p>Sunrise: {{ sunTimes.sunrise }}</p>
-      <p>Sunset: {{ sunTimes.sunset }}</p>
+    <section class="flex flex-col items-center">
+      <div class="mt-4 flex gap-2" v-for="e in equinoxes" :key="e.kind">
+        <Sprout v-if="e.kind === 'spring'" /><Leaf v-else /> {{ e.date }} (in {{ e.days }} days)
+      </div>
+    </section>
+
+    <section class="flex flex-col items-center gap-2">
+      <div class="flex gap-2"><Sunrise />{{ sunTimes.sunrise }}</div>
+      <div class="flex gap-2"><Sunset />{{ sunTimes.sunset }}</div>
+      <div class="flex gap-2 mt-8">
+        <RotateCwClock />
+        {{ dst.date }}, {{ dst.label }} (in {{ dst.days }} days)
+      </div>
     </section>
   </div>
 </template>
