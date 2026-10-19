@@ -2,12 +2,13 @@ export type Kind = 'spring' | 'summer' | 'autumn' | 'winter'
 
 export interface SeasonEvent {
   kind: Kind
-  at: Date
   day: number // day number in Europe/Zurich
 }
 
-const TZ = 'Europe/Zurich'
-const DAY_MS = 86_400_000
+export const TZ = 'Europe/Zurich'
+export const DAY_MS = 86_400_000
+export const rad = (deg: number) => (deg * Math.PI) / 180
+
 const DELTA_T_S = 69 // TT -> UT, approx. for 2020s
 
 // Meeus, Astronomical Algorithms ch. 27 (valid 1000..3000)
@@ -44,8 +45,6 @@ const TERMS: [number, number, number][] = [
   [9, 227.73, 1222.114],
   [8, 15.45, 16859.074],
 ]
-
-const rad = (deg: number) => (deg * Math.PI) / 180
 
 function seasonInstant(year: number, kind: Kind): Date {
   const Y = (year - 2000) / 1000
@@ -88,68 +87,39 @@ function lastSundayUtc(year: number, month0: number): number {
   return Date.UTC(year, month0, last.getUTCDate() - last.getUTCDay(), 1)
 }
 
+export const isSolstice = (e: SeasonEvent) => e.kind === 'summer' || e.kind === 'winter'
+export const isEquinox = (e: SeasonEvent) => !isSolstice(e)
+
+/** All season events for year-1 .. year+1, sorted by day */
 export function getSeasonEvents(year: number): SeasonEvent[] {
   const kinds: Kind[] = ['spring', 'summer', 'autumn', 'winter']
-  const list: SeasonEvent[] = []
-  for (let y = year - 1; y <= year + 2; y++) {
-    for (const kind of kinds) {
-      const at = seasonInstant(y, kind)
-      list.push({ kind, at, day: dayNumber(at) })
-    }
-  }
-  return list.sort((x, y) => x.day - y.day)
-}
-
-export function getUpcoming(events: SeasonEvent[], today: number) {
-  return (['winter', 'summer', 'spring', 'autumn'] as Kind[]).map((kind) => {
-    const event = events.find((e) => e.kind === kind && e.day >= today)!
-    return { kind, date: fmtDay(event.day), days: event.day - today }
-  })
-}
-
-export function getMirrorDayForSolstice(
-  events: SeasonEvent[],
-  solstice: SeasonEvent,
-  today: number,
-) {
-  const d = today - solstice.day
-  const target =
-    d < 0
-      ? solstice.day - d
-      : events.find((event) => event.kind === solstice.kind && event.day > solstice.day)!.day - d
-  return { date: fmtDay(target), days: target - today }
+  return [year - 1, year, year + 1]
+    .flatMap((y) => kinds.map((kind) => ({ kind, day: dayNumber(seasonInstant(y, kind)) })))
+    .sort((x, y) => x.day - y.day)
 }
 
 /**
- * Mirror day around the nearest solstice S, with d = today - S:
+ * Mirror day around solstice S, with d = today - S:
  *  - before S (d < 0): S + |d|
  *  - after S (d >= 0): the next occurrence of the same solstice minus d
  */
-export function getMirrorDay(events: SeasonEvent[], today: number) {
-  const solstices = events.filter((e) => e.kind === 'summer' || e.kind === 'winter')
-  const nearest = solstices.reduce((best, e) =>
-    Math.abs(e.day - today) < Math.abs(best.day - today) ? e : best,
-  )
-  const mirror = getMirrorDayForSolstice(events, nearest, today)
-  return {
-    kind: nearest.kind,
-    offset: Math.abs(today - nearest.day),
-    ...mirror,
-  }
+export function getMirrorDay(events: SeasonEvent[], solstice: SeasonEvent, today: number) {
+  const d = today - solstice.day
+  if (d < 0) return solstice.day - d
+  const next = events.find((e) => e.kind === solstice.kind && e.day > solstice.day)!
+  return next.day - d
 }
 
 export function getNextDst(now: Date, today: number) {
-  const nowMs = now.getTime()
-  const candidates: { at: number; toSummer: boolean }[] = []
-  for (const y of [now.getFullYear(), now.getFullYear() + 1]) {
-    candidates.push({ at: lastSundayUtc(y, 2), toSummer: true })
-    candidates.push({ at: lastSundayUtc(y, 9), toSummer: false })
-  }
-  const next = candidates.filter((c) => c.at > nowMs).sort((a, b) => a.at - b.at)[0]!
-  const day = dayNumber(new Date(next.at))
+  const year = new Date(today * DAY_MS).getUTCFullYear()
+  const next = [year, year + 1]
+    .flatMap((y) => [
+      { at: lastSundayUtc(y, 2), toSummer: true },
+      { at: lastSundayUtc(y, 9), toSummer: false },
+    ])
+    .find((c) => c.at > now.getTime())!
   return {
-    date: fmtDay(day),
-    days: day - today,
+    day: dayNumber(new Date(next.at)),
     label: next.toSummer
       ? '02:00 → 03:00 (to CEST, summer time)'
       : '03:00 → 02:00 (to CET, winter time)',

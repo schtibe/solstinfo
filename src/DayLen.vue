@@ -4,49 +4,34 @@ import { computed, ref } from 'vue'
 import { Sunrise, Sunset, RotateCwClock, Sprout, Leaf } from '@lucide/vue'
 
 import {
+  DAY_MS,
   dayNumber,
   fmtDay,
-  getMirrorDayForSolstice,
+  getMirrorDay,
   getNextDst,
   getSeasonEvents,
-  getUpcoming,
-} from './calculations'
+  isEquinox,
+  isSolstice,
+} from './equinox'
 import { getSunTimes } from './sun'
 
 const now = ref(new Date())
 const today = computed(() => dayNumber(now.value))
-const year = computed(() => now.value.getFullYear())
+const year = computed(() => new Date(today.value * DAY_MS).getUTCFullYear())
 
 const events = computed(() => getSeasonEvents(year.value))
-const upcoming = computed(() => getUpcoming(events.value, today.value))
 
-const upcomingSolstices = computed(() =>
-  events.value
-    .filter(
-      (event) => (event.kind === 'summer' || event.kind === 'winter') && event.day >= today.value,
-    )
-    .slice(0, 2),
-)
-const nextSolstice = computed(() => upcomingSolstices.value[0]!)
-
-const fartherSolstice = computed(() =>
-  [...events.value]
-    .reverse()
-    .find(
-      (event) => (event.kind === 'summer' || event.kind === 'winter') && event.day < today.value,
-    )!,
-)
-const nextMirror = computed(() =>
-  getMirrorDayForSolstice(events.value, nextSolstice.value, today.value),
-)
-const fartherMirror = computed(() =>
-  getMirrorDayForSolstice(events.value, fartherSolstice.value, today.value),
-)
+const solstices = computed(() => events.value.filter(isSolstice))
+const nextIndex = computed(() => solstices.value.findIndex((e) => e.day >= today.value))
+const nextSolstice = computed(() => solstices.value[nextIndex.value]!)
+const lastSolstice = computed(() => solstices.value[nextIndex.value - 1]!)
+const nextMirror = computed(() => getMirrorDay(events.value, nextSolstice.value, today.value))
+const lastMirror = computed(() => getMirrorDay(events.value, lastSolstice.value, today.value))
 const equinoxes = computed(() =>
-  upcoming.value.filter((event) => event.kind === 'spring' || event.kind === 'autumn'),
+  events.value.filter((e) => isEquinox(e) && e.day >= today.value).slice(0, 2),
 )
 const dst = computed(() => getNextDst(now.value, today.value))
-const sunTimes = computed(() => getSunTimes(now.value))
+const sunTimes = computed(() => getSunTimes(today.value))
 </script>
 
 <template>
@@ -58,20 +43,21 @@ const sunTimes = computed(() => getSunTimes(now.value))
         {{ nextSolstice.day - today }} days until the {{ nextSolstice.kind }} solstice
       </h1>
       <div class="text-sm mt-4">Mirror day:</div>
-      <div>{{ nextMirror.date }}</div>
+      <div>{{ fmtDay(nextMirror) }}</div>
     </section>
 
     <section class="flex flex-col items-center">
       <h2 class="text-3xl">
-        {{ today - fartherSolstice.day }} days since the {{ fartherSolstice.kind }} solstice
+        {{ today - lastSolstice.day }} days since the {{ lastSolstice.kind }} solstice
       </h2>
       <div class="text-sm mt-4">Mirror day:</div>
-      <div>{{ fartherMirror.date }}</div>
+      <div>{{ fmtDay(lastMirror) }}</div>
     </section>
 
     <section class="flex flex-col items-center">
       <div class="mt-4 flex gap-2" v-for="e in equinoxes" :key="e.kind">
-        <Sprout v-if="e.kind === 'spring'" /><Leaf v-else /> {{ e.date }} (in {{ e.days }} days)
+        <Sprout v-if="e.kind === 'spring'" /><Leaf v-else /> {{ fmtDay(e.day) }} (in
+        {{ e.day - today }} days)
       </div>
     </section>
 
@@ -80,7 +66,7 @@ const sunTimes = computed(() => getSunTimes(now.value))
       <div class="flex gap-2"><Sunset />{{ sunTimes.sunset }}</div>
       <div class="flex gap-2 mt-8">
         <RotateCwClock />
-        {{ dst.date }}, {{ dst.label }} (in {{ dst.days }} days)
+        {{ fmtDay(dst.day) }}, {{ dst.label }} (in {{ dst.day - today }} days)
       </div>
     </section>
   </div>
